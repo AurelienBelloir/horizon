@@ -67,6 +67,7 @@ horizon-bots: load-test bots for a Minecraft Java Edition 26.3 server (offline m
   --seed N               default 12345
   --explore-speed B      blocks a second an explore bot flies; default 22 (as fast as chunks come)
   --name PREFIX          bot names: PREFIX0, PREFIX1...; default Bot
+  --timer F              cheat, to test an anticheat: tick F times as fast as vanilla's client (1.5: 30 Hz)
   --report FILE          a JSON summary at the end (- prints it after the per-second lines)
 ";
 
@@ -121,6 +122,8 @@ struct Options {
     no_read: bool,
     name: String,
     report: Option<String>,
+    /// How many times as fast as vanilla's 20 Hz the bots tick (a timer cheat above 1).
+    timer: f64,
 }
 
 fn options() -> Result<Options, String> {
@@ -138,6 +141,7 @@ fn options() -> Result<Options, String> {
         no_read: false,
         name: "Bot".into(),
         report: None,
+        timer: 1.0,
     };
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
@@ -169,6 +173,12 @@ fn options() -> Result<Options, String> {
             "--flood" => o.flood = value.parse().map_err(|_| number("packets a tick"))?,
             "--name" => o.name = value,
             "--report" => o.report = Some(value),
+            "--timer" => {
+                o.timer = value.parse().map_err(|_| number("a speed, like 1.5"))?;
+                if !(o.timer >= 0.1 && o.timer <= 20.0) {
+                    return Err(format!("--timer {value}: use 0.1 to 20"));
+                }
+            }
             _ => return Err(format!("unknown option {arg}; --help lists them")),
         }
     }
@@ -789,7 +799,7 @@ fn run_bot(
             bot.online.store(false, Ordering::SeqCst);
             break;
         }
-        next += Duration::from_millis(50);
+        next += Duration::from_secs_f64(0.05 / o.timer);
         let now = Instant::now();
         if next > now {
             thread::sleep(next - now);
